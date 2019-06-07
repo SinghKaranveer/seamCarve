@@ -1,4 +1,4 @@
-//
+
 //  main.cpp
 //  openCVTest
 //
@@ -10,29 +10,60 @@
 //#include <opencv2/imgproc/imgproc.hpp>
 //#include "/usr/local/Cellar/opencv/4.1.0_2/include/opencv4/opencv2/imgproc/imgproc.hpp"
 //#include "/usr/local/Cellar/opencv/4.1.0_2/include/opencv4/opencv2/core.hpp"
-#include "/usr/local/Cellar/opencv/4.1.0_2/include/opencv4/opencv2/opencv.hpp"
+//#include "/usr/local/Cellar/opencv/4.1.0_2/include/opencv4/opencv2/opencv.hpp"
+#include <opencv2/opencv.hpp>
+#include <pthread.h>
+#include <stdlib.h>
 #include <time.h>
+#include <string.h>
 //#include <emscripten.h>
 
 
 #define HORIZONTAL 0
 #define VERTICAL 1
 
+#define MULTITHREAD 1
+
 using namespace cv;
+
+
+typedef struct thread_data_s {
+    int tid;
+    int num_threads;
+    int num_elements;
+    int *seam;
+    Mat* image;
+    int offset;
+    int chunk_size;
+    double *partial_sum;
+} thread_data_t;
 
 Mat calculateImageGradient(Mat input);
 Mat calculateImageEnergy(Mat input, int direction);
 Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration);
 void removeSeam(Mat input, int i, int j, int location, int overHalf);
+void *removeSeamMT(void* args);
 
 int main(int argc, const char * argv[]) {
     clock_t start = clock();
-    int dir = HORIZONTAL;
+    int dir;
+    if(strcmp (argv[2], "HORIZONTAL") == 0)
+	dir = HORIZONTAL;
+    else if(strcmp (argv[2], "VERTICAL") == 0)
+	dir = VERTICAL;
+    else
+    {
+	    std::cout << "Sorry unknown direction, please type either 'HORIZONTAL' or 'VERTICAL' " << std::endl;
+	    return 0;
+    }
+    //char* file = argv[1];
+    int numSeams = atoi(argv[3]);
+    std::cout << argv[1] << std::endl;
     Mat testImage, outputImage, outputImage2;
-    testImage = cv::imread("test3.jpg", IMREAD_COLOR);
+    testImage = cv::imread(argv[1], IMREAD_COLOR);
     namedWindow("Display Window", WINDOW_AUTOSIZE);
     //imshow("Display Window", outputImage2);
-    for(int i = 0; i < 200; i++)
+    for(int i = 0; i < numSeams; i++)
     {
         if(i % 10 == 0)
         {
@@ -45,6 +76,7 @@ int main(int argc, const char * argv[]) {
     float seconds = ((float)end - (float)start) / CLOCKS_PER_SEC;
     std::cout<<"Time elapsed "<<seconds<<std::endl;
     imwrite("test_output.jpg", testImage);
+    namedWindow("Resized Image", WINDOW_AUTOSIZE); imshow("Resized Image", testImage);
     waitKey(0);
     return 0;
 }
@@ -141,7 +173,7 @@ Mat calculateImageEnergy(Mat input, int direction)
     float scale = 255.0 / (Cmax - Cmin);
     output.convertTo(colorMap, CV_8U, scale);
     applyColorMap(colorMap, colorMap, cv::COLORMAP_JET);
-    namedWindow("Cumulative Energy Map", WINDOW_AUTOSIZE); imshow("Cumulative Energy Map", colorMap);
+    //namedWindow("Cumulative Energy Map", WINDOW_AUTOSIZE); imshow("Cumulative Energy Map", colorMap);
 
     return output;
 }
@@ -156,6 +188,7 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
     {
         cv::Point min_loc, max_loc;
         double min, max, left, center, right;
+        int *seam = (int *) malloc (sizeof (int) * numRows);
         Mat bottomRow = energyMap.row(numRows - 1);
         int overHalf = 0;
         cv::minMaxLoc(bottomRow, &min, &max, &min_loc, &max_loc);
@@ -165,14 +198,20 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
         if(currentPoint > numCols / 2)
             overHalf = 1;
         //std::cout << currentPoint << std::endl;
-        removeSeam(originalImage, numRows - 1, currentPoint, direction, overHalf);
+        //removeSeam(originalImage, numRows - 1, currentPoint, direction, overHalf);
+        int seamIndex = 0;
         energyMap.at<double>(numRows - 1, currentPoint) = 999;
+        seam [seamIndex] = currentPoint;
+        seamIndex++;
+
         for(int i = numRows - 2; i > -1; i--)
         {
-            //removeSeam(originalImage, i, currentPoint, direction, overHalf);
-            originalImage.at<cv::Vec3b>(i, currentPoint)[0]=0; 
-            originalImage.at<cv::Vec3b>(i, currentPoint)[1]=0;
-            originalImage.at<cv::Vec3b>(i, currentPoint)[2]=0;
+            if(MULTITHREAD == 0)
+                removeSeam(originalImage, i, currentPoint, direction, overHalf);
+
+            //originalImage.at<cv::Vec3b>(i, currentPoint)[0]=0; 
+            //originalImage.at<cv::Vec3b>(i, currentPoint)[1]=0;
+            //originalImage.at<cv::Vec3b>(i, currentPoint)[2]=0;
             //std::cout << i << " " << currentPoint << std::endl;
 
             if(i == 0)
@@ -208,12 +247,50 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
 
             energyMap.at<double>(i, currentPoint) = 999;
 
+            seam [seamIndex] = currentPoint;
+            seamIndex++;
+
+
         }
                 //std::cout << "here2" << std::endl;
-        if(overHalf == 1)
+
+        if(MULTITHREAD == 0)
+        {
+            if(overHalf == 1)
+                originalImage = originalImage.colRange(0, numCols - 1);
+            else
+                originalImage = originalImage.colRange(1, numCols);
+        }
+        else    
+        {
+            int num_threads = 2;
+            pthread_t *thread_id = (pthread_t *) malloc (num_threads * sizeof (pthread_t)); /* Data structure to store the thread IDs. */
+            pthread_attr_t attributes; /* Thread attributes. */
+            pthread_attr_init (&attributes); /* Initialize the thread attributes to the default values. */
+            thread_data_t *thread_data = (thread_data_t *) malloc (sizeof (thread_data_t) * num_threads);
+            int chunk_size = numRows / num_threads;
+
+            for(int i = 0; i < num_threads; i++)
+            {
+                thread_data[i].tid = i; 
+                thread_data[i].num_threads = num_threads;
+                thread_data[i].seam = seam; 
+                thread_data[i].image = &originalImage;
+                thread_data[i].offset = i * chunk_size; 
+                thread_data[i].chunk_size = chunk_size;
+            }
+            for (int i = 0; i < num_threads; i++)
+                pthread_create (&thread_id[i], &attributes, removeSeamMT, (void *) &thread_data[i]);
+
+            for (int i = 0; i < num_threads; i++)
+                pthread_join (thread_id[i], NULL);
+
+            free ((void *) seam);
+            free ((void *) thread_id);
             originalImage = originalImage.colRange(0, numCols - 1);
-        else
-            originalImage = originalImage.colRange(1, numCols);
+
+
+        }
 
     }
     else //direction == HORIZONTAL
@@ -233,9 +310,9 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
         for(int j = numCols - 2; j > -1; j--)
         {
             removeSeam(originalImage, currentPoint, j, direction, overHalf);
-            //originalImage.at<cv::Vec3b>(currentPoint, j)[0]=0; 
-            //originalImage.at<cv::Vec3b>(currentPoint, j)[1]=0;
-            //originalImage.at<cv::Vec3b>(currentPoint, j)[2]=0;
+           // originalImage.at<cv::Vec3b>(currentPoint, j)[0]=0; 
+           // originalImage.at<cv::Vec3b>(currentPoint, j)[1]=0;
+           // originalImage.at<cv::Vec3b>(currentPoint, j)[2]=0;
             if(j == 0)
                 break;
 
@@ -359,4 +436,47 @@ void removeSeam(Mat input, int i, int j, int direction, int overHalf)
         transpose(newCol, newCol);
         newCol.copyTo(input.col(j));
     }
+}
+
+void *removeSeamMT(void* args)
+{
+    thread_data_t *thread_data = (thread_data_t *) args;
+    Mat* image = thread_data->image;
+    Mat input = *image;
+    int* seam = thread_data->seam;
+    int offset = thread_data->offset;
+    int chunk_size = thread_data->chunk_size;
+    int seamIndex = offset;
+    int numRows = input.rows;
+    int numCols = input.cols;
+    //for(int i = offset; i < offset + chunk_size; i++)
+    for(int i = offset + chunk_size - 1; i >= offset; i--)
+    {
+        Mat newRow;
+        Mat firstHalf, secondHalf;
+        Mat dummy(1, 1, CV_8UC3, Vec3b(0, 0, 0));
+        int j = seam[seamIndex];
+        seamIndex++;
+        if(j == 0)
+        {
+            secondHalf = input.rowRange(i, i + 1).colRange(j + 1, numCols);
+            hconcat(secondHalf, dummy, newRow);
+        }
+        else if (j == numCols - 1)
+        {
+            firstHalf = input.rowRange(i, i + 1).colRange(0, j);
+            hconcat(firstHalf, dummy, newRow);
+        }
+        else
+        {
+            firstHalf = input.rowRange(i, i + 1).colRange(0, j);
+            secondHalf = input.rowRange(i, i + 1).colRange(j + 1, numCols);
+            hconcat(secondHalf, dummy, secondHalf);
+            hconcat(firstHalf, secondHalf, newRow);
+        }
+        newRow.copyTo(input.row(i));
+
+
+    }
+    pthread_exit (NULL);
 }
