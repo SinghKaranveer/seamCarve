@@ -3,7 +3,7 @@
 
 ## Getting Started
 
-In order to run this code, there are a few prerequisites.  Firstly, this code uses the OpenCV C++ library, so that needs to be installed.  Also, POSIX pthreads are used, therefore this will only run on MacOS, Linux, or any other POSIX compliant operating systems.  A makefile as been included, so to build the executable simply run ```make``` and it should compile.
+In order to run this code, there are a few prerequisites.  Firstly, this code uses the OpenCV C++ library, so that needs to be installed.  Also, POSIX pthreads are used, therefore this will only run on MacOS, Linux, or any other POSIX compliant operating systems.  A makefile as been included, so to build the executable simply run ```make``` and it should compile.  If you do not wish to compile, a pre-compiled executable ```seamCarve.out``` is also provided.
 
 ### Running
 
