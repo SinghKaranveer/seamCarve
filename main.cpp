@@ -7,10 +7,6 @@
 //
 
 #include <iostream>
-//#include <opencv2/imgproc/imgproc.hpp>
-//#include "/usr/local/Cellar/opencv/4.1.0_2/include/opencv4/opencv2/imgproc/imgproc.hpp"
-//#include "/usr/local/Cellar/opencv/4.1.0_2/include/opencv4/opencv2/core.hpp"
-//#include "/usr/local/Cellar/opencv/4.1.0_2/include/opencv4/opencv2/opencv.hpp"
 #include <opencv2/opencv.hpp>
 #include <pthread.h>
 #include <stdlib.h>
@@ -22,7 +18,8 @@
 #define HORIZONTAL 0
 #define VERTICAL 1
 
-#define MULTITHREAD 1
+#define MULTITHREAD 0
+#define NUM_THREADS 4
 
 using namespace cv;
 
@@ -263,7 +260,7 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
         }
         else    
         {
-            int num_threads = 2;
+            int num_threads = NUM_THREADS;
             pthread_t *thread_id = (pthread_t *) malloc (num_threads * sizeof (pthread_t)); /* Data structure to store the thread IDs. */
             pthread_attr_t attributes; /* Thread attributes. */
             pthread_attr_init (&attributes); /* Initialize the thread attributes to the default values. */
@@ -449,7 +446,6 @@ void *removeSeamMT(void* args)
     int seamIndex = offset;
     int numRows = input.rows;
     int numCols = input.cols;
-    //for(int i = offset; i < offset + chunk_size; i++)
     for(int i = offset + chunk_size - 1; i >= offset; i--)
     {
         Mat newRow;
