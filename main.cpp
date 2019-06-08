@@ -53,13 +53,11 @@ int main(int argc, const char * argv[]) {
 	    std::cout << "Sorry unknown direction, please type either 'HORIZONTAL' or 'VERTICAL' " << std::endl;
 	    return 0;
     }
-    //char* file = argv[1];
     int numSeams = atoi(argv[3]);
     std::cout << argv[1] << std::endl;
     Mat testImage, outputImage, outputImage2;
     testImage = cv::imread(argv[1], IMREAD_COLOR);
     namedWindow("Display Window", WINDOW_AUTOSIZE);
-    //imshow("Display Window", outputImage2);
     for(int i = 0; i < numSeams; i++)
     {
         if(i % 10 == 0)
@@ -83,7 +81,6 @@ Mat calculateImageGradient(Mat input)
     Mat inputBlur;
     Mat convert;
     Mat greyScale, greyX, greyY, absGreyX, absGreyY, output;
-    //GaussianBlur(input, inputBlur, Size(3,3), 0, 0, BORDER_DEFAULT);
     cvtColor(input, greyScale, COLOR_BGR2GRAY);
     Scharr(greyScale, greyX, CV_16S, 1, 0, 1, 0, BORDER_DEFAULT); 
     Scharr(greyScale, greyY, CV_16S, 0, 1, 1, 0, BORDER_DEFAULT); 
@@ -92,8 +89,6 @@ Mat calculateImageGradient(Mat input)
     cv::addWeighted(absGreyX, 0.5, absGreyY, 0.5, 0, output);
     output.convertTo(convert, CV_64F, 1.0/255.0);
     return convert;
-    //return absGreyX * 0.5 + absGreyY * 0.5;
-    //return blue*0.33 + green*0.33 + red*0.33;
 }
 
 Mat calculateImageEnergy(Mat input, int direction)
@@ -170,7 +165,6 @@ Mat calculateImageEnergy(Mat input, int direction)
     float scale = 255.0 / (Cmax - Cmin);
     output.convertTo(colorMap, CV_8U, scale);
     applyColorMap(colorMap, colorMap, cv::COLORMAP_JET);
-    //namedWindow("Cumulative Energy Map", WINDOW_AUTOSIZE); imshow("Cumulative Energy Map", colorMap);
 
     return output;
 }
@@ -178,7 +172,6 @@ Mat calculateImageEnergy(Mat input, int direction)
 Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
 {
     int numRows, numCols, currentPoint, min;
-    //std::cout<<"Iteration: "<<iteration<<std::endl;
     numRows = originalImage.rows;
     numCols = originalImage.cols;
     if(direction == VERTICAL)
@@ -194,8 +187,6 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
             currentPoint = 0;
         if(currentPoint > numCols / 2)
             overHalf = 1;
-        //std::cout << currentPoint << std::endl;
-        //removeSeam(originalImage, numRows - 1, currentPoint, direction, overHalf);
         int seamIndex = 0;
         energyMap.at<double>(numRows - 1, currentPoint) = 999;
         seam [seamIndex] = currentPoint;
@@ -206,10 +197,6 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
             if(MULTITHREAD == 0)
                 removeSeam(originalImage, i, currentPoint, direction, overHalf);
 
-            //originalImage.at<cv::Vec3b>(i, currentPoint)[0]=0; 
-            //originalImage.at<cv::Vec3b>(i, currentPoint)[1]=0;
-            //originalImage.at<cv::Vec3b>(i, currentPoint)[2]=0;
-            //std::cout << i << " " << currentPoint << std::endl;
 
             if(i == 0)
                 break;
@@ -249,7 +236,6 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
 
 
         }
-                //std::cout << "here2" << std::endl;
 
         if(MULTITHREAD == 0)
         {
@@ -307,9 +293,6 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
         for(int j = numCols - 2; j > -1; j--)
         {
             removeSeam(originalImage, currentPoint, j, direction, overHalf);
-           // originalImage.at<cv::Vec3b>(currentPoint, j)[0]=0; 
-           // originalImage.at<cv::Vec3b>(currentPoint, j)[1]=0;
-           // originalImage.at<cv::Vec3b>(currentPoint, j)[2]=0;
             if(j == 0)
                 break;
 
@@ -344,7 +327,6 @@ Mat findSeam(Mat energyMap, Mat originalImage, int direction, int iteration)
         originalImage = originalImage.rowRange(0, numRows - 1);
     }
 
-    //namedWindow("Seam", WINDOW_AUTOSIZE); imshow("Seam", originalImage);
     return originalImage;
 }
 
